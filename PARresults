@@ -1,0 +1,126 @@
+'''
+This code pulls from created csv files from samosTS1.py script to create plots to display 
+histograms of the data
+'''
+import pandas as pd
+import os
+import glob
+from collections import defaultdict
+from csv import DictReader
+from csv import reader
+import numpy as np
+import csv
+import matplotlib.pyplot as plt
+
+path = r'/Net/mdc/people/ograff/csvfiles/'
+folder = os.fsencode(path)
+filenames =[]
+exceedUL = []
+percent98 = []
+percent99 = []
+percent995 =[]
+arr = []
+for file in os.listdir(folder):
+	filename = os.fsdecode(file)
+	if filename.endswith('.csv'):
+		filenames.append(filename)
+#print(len(filenames))
+#print(filenames)
+
+#had to remove files that had VERY high par values and were skewing the results 
+for file in filenames:
+
+	#This opens a specific file, skips the SHIPYEAR line, creates a header
+	#so I can specifiy which column to use, chooses column with numbers, and rows that have values
+	df = pd.read_csv(path+file,header = None, skiprows =1, usecols = [1], nrows = 4)
+	
+	df = df.append(pd.DataFrame(arr)).T
+			
+	exceed = df[0]
+	for val in exceed:
+		val=round(val,3)
+		exceedUL.append(val)
+	per98 = df[1]
+	for val in per98:
+		#print(val)
+		val=round(val,3)
+		percent98.append(val)
+	per99 = df[2]
+	for val in per99:
+		#print(val)
+		val=round(val,3)
+		percent99.append(val)	
+	per995 = df[3]
+	for val in per995:
+		#print(val)
+		val=round(val,3)
+		percent995.append(val)	
+
+#print(exceedUL)
+#print(percent98)
+#print(percent99)
+#print(percent995)
+
+meanex = np.mean(exceedUL)
+print(meanex)
+stdex = np.std(exceedUL)
+#print(meanex, stdex)
+
+mean98 = np.mean(percent98)
+std98 = np.std(percent98)
+mean99 = np.mean(percent99)
+std99 = np.std(percent99)
+mean995 = np.mean(percent995)
+std995 = np.std(percent995)
+print(mean98, std98, mean99, std99, mean995, std995)
+
+#histogram
+plt.figure()
+plt.hist(exceedUL, bins = 50)
+plt.title('Percent of PAR exceeding defined Upper Limit for all ships/years')
+plt.xlabel('% of data that exceeds UL for each ship')
+plt.ylabel('Number of ships')
+plt.show()
+plt.savefig('PARexceed.png')
+plt.close()
+
+plt.figure()
+plt.hist(percent98, bins = 100)
+plt.title('98th percentile of PAR for all ships/years')
+plt.xlabel('98th percentile of PAR value')
+plt.ylabel('Number of ships')
+plt.show()
+plt.savefig('PAR98perc.png')
+plt.close()
+
+plt.figure()
+plt.hist(percent99, bins = 100)
+plt.title('99th percentile of PAR for all ships/years')
+plt.xlabel('99th percentile of PAR value')
+plt.ylabel('Number of ships')
+plt.show()
+plt.savefig('PAR99perc.png')
+plt.close()
+
+plt.figure()
+plt.hist(percent995, bins = 100)
+plt.title('99.5th percentile of PAR for all ships/years')
+plt.xlabel('99.5th percentile of PAR value')
+plt.ylabel('Number of ships')
+plt.show()
+plt.savefig('PAR995perc.png')
+plt.close()
+
+#create csv file 
+ds = pd.DataFrame([['Mean of %PAR > UL',meanex],['Std of %PAR>UL', stdex],['mean 98th %ile',mean98],['std 98th %ile', std98],['mean 99th %ile',mean99],['std 99th %ile', std99],['mean 99.5th %ile',mean995],['std 99.5th %ile', std995]])
+ds.drop_duplicates()
+ds.to_csv('/Net/mdc/people/ograff/PARRESULTS/PARcalc.csv')
+print(ds)
+print(len(filenames))
+print(len(exceedUL))
+print(len(percent99))
+df = pd.DataFrame({"Ship Name & Year":filenames,"%exceedence":exceedUL, "99th %ile":percent99})
+df.to_csv("overallPARdata.csv", index = False)
+
+print(df)
+
