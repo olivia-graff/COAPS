@@ -1,0 +1,376 @@
+import xarray as xr
+import matplotlib.pyplot as plt
+import glob
+import os
+import numpy as np
+import pandas as pd
+import argparse
+import csv
+import netCDF4 as nc
+
+#command line entry to ship name/year 
+def parse_args():
+	parser = argparse.ArgumentParser()
+	parser.add_argument('callsign',type = str)
+	parser.add_argument('year',type = int)
+	return parser.parse_args()
+
+args = parse_args()
+shipname = args.callsign
+year = args.year
+
+#Location of ship & year 	
+path = '/Net/samos_pub/data/intermediate/'
+path = os.path.join(path,shipname + '/',str(year) +'/',"")
+#print(path)
+
+folder = os.fsencode(path)
+
+#empty list to store every file in an array
+filenames = []
+
+#can make some sort of if statement to put the for loops in such as: if path exists...
+
+#loop through the files appending them to the array: filename
+for file in os.listdir(folder):
+	filename = os.fsdecode(file)
+	if filename.endswith('.nc'):
+		filenames.append(filename)
+#sort the files so that the files are in date order
+filenames.sort()
+
+#empty list to store percentages calculated in for loop calculated
+percentages = []
+
+#variable for upper limit so different values can be tested
+upperlimit = 2600.
+
+#initalize variables
+exceedUL = 0
+inrange = 0
+NanCount = 0
+zflagCount = 0
+bflagCount = 0
+
+PARarr = []
+flagarr= []
+colors = []
+PARarr2 = []
+flagarr2 = []
+
+exceedUL2 = 0
+inrange2 = 0
+NanCount2 = 0
+
+PARz = []
+PARb = []
+PAR2z = []
+PAR2b = []
+
+#loop that opens/closes each file, appending the PAR value for each day each time
+#it is read (each minute after 17:50 -2359 UTC)
+for file in filenames:
+	#print('processing file:', file)
+	
+	#opens file 
+	ds = xr.open_dataset(path + file)
+	
+	#check to see if RAD_PAR and RAD_PAR 2 exist in the dataset
+	try:
+		
+		PAR = ds.RAD_PAR
+	except AttributeError:
+		PAR = None
+		#print('Par doesnt exist')				
+	else:
+
+		#reads par values
+		#PAR = ds.RAD_PAR
+
+
+		#reads flags	
+		#returns what value in each array element of flag variables the par 
+		qcindexofflag1 = ds.RAD_PAR.qcindex
+
+		#stores all values in an array 
+		PAR = np.array(PAR)
+		flags = np.array(ds.flag)
+
+		#grabs parflag from whichever element the flag of parflag is in and puts it in an array 
+		#qcindexofflag -1 because the range is from 0-whateverindex -1, or 1 to qcindex of flag
+		rad_par_flags = [chr(f[qcindexofflag1-1])for f in flags]
+		
+		for i in range (len(rad_par_flags)):
+			flagarr.append(rad_par_flags[i])
+			
+		#for loop that interpolates through PAR data and adds to counter based on argument
+		#this also seperates Z flagged par and B flagged par into seperate arrays
+		
+		for i in range (len(PAR)):
+			#need to also read B/Z flags and count quantity 
+			#of each flag that is present, and count those. 
+			#Conditions for a B flag: special, missing, negative, greater than upperlimit
+			if(rad_par_flags[i] == 'B'):
+				if (PAR[i] < 0):
+					PAR[i] = None
+					NanCount +=1
+				else:
+					exceedUL +=1
+				PARb.append(PAR[i])
+			else:
+				inrange+=1
+				PARz.append(PAR[i])
+			PARarr.append(PAR[i])
+		
+	try:
+		PAR2 = ds.RAD_PAR2
+	except AttributeError:
+		PAR2 = None
+		#print('RAD_PAR2 doesnt exist')	
+	else:
+		
+		#returns what value in each array element of flag variables the par 
+		qcindexofflag2 = ds.RAD_PAR2.qcindex
+
+		#stores all values in an array 
+		PAR2 = np.array(PAR2)
+		flags2 = np.array(ds.flag)
+
+		#grabs parflag from whichever element the flag of parflag is in and puts it in an array 
+		#qcindexofflag -1 because the range is from 0-whateverindex -1, or 1 to qcindex of flag
+		rad_par_flags2 = [chr(f[qcindexofflag2-1])for f in flags2]
+		
+		for i in range (len(rad_par_flags2)):
+			flagarr2.append(rad_par_flags2[i])
+			
+		#for loop that interpolates through PAR data and adds to counter based on argument
+		#this also seperates Z flagged par and B flagged par into seperate arrays
+		
+		for i in range (len(PAR2)):
+			#need to also read B/Z flags and look count how many
+			#of each flag is present, and count those. 
+			#Conditions for a B flag: special, missing, negative, greater than upperlimit
+			if(rad_par_flags2[i] == 'B'):
+				if (PAR2[i] < 0):
+					PAR2[i] = None
+					NanCount2 +=1
+				else:
+					exceedUL2 +=1
+				PAR2b.append(PAR2[i])
+			else:
+				inrange2+=1
+				PAR2z.append(PAR2[i])
+			PARarr2.append(PAR2[i])
+		
+		
+	#closes file
+	ds.close()
+
+#print(PARarr)
+
+#---------------------------------------------------------------
+if len(PARarr)!=0:
+
+	#print(PARb)
+	#print(len(flagarr), len(PARarr))
+	#print(len(PARb), len(PARz))
+	#exclude special and missing:
+	
+	#for i in range(1,len(PARarr)):
+	#removes special, missing, and nan values
+	#if pd.isnull(PARarr):
+	#PARarr = np.nan_to_num(PARarr)
+	'''
+	#Count exceeding and in range values excluding special, missing and nan values
+	for i in range(len(PARarr)):
+		if (PARarr[i] < 0):
+			PARarr[i] = None
+			NanCount+=1
+		elif (PARarr[i] >= upperlimit):
+			exceedUL +=1
+		else:
+			inrange+=1
+	'''
+	#print(NanCount, exceedUL, inrange)	
+	#print(exceedUL + inrange)
+	#finds the percentages and appends them to the empty list for the overall percent
+	#of PAR value that is over the defined upperlimit.
+	#totalobs = NanCount + exceedUL + inrange
+	percent = (exceedUL/(exceedUL+inrange))*100.
+	#print(percent)
+	#percentages.append(percent)
+	#print('percent of par > upperlimit: ',percent)
+	
+	for i in range(1,len(PARarr)):
+		if np.isnan(PARarr[i]):
+			PARarr[i] = PARarr[i-1]
+		
+	percentile99 = np.nanpercentile(PARarr,99)
+	percentile98 = np.nanpercentile(PARarr,98)
+	percentile995 = np.nanpercentile(PARarr,99.5)
+	#print('98th percentile',percentile98)
+	#print('99th percentile', percentile99)
+	#print('99.5th percentile', percentile995)
+
+	maxpar = np.nanmax(PARarr)
+	#Use nanmax because there are nanvalues in the array
+	#print('maxpar',np.nanmax(PARarr))
+	
+	#print(flagarr)
+	#combinedarray = np.vstack((flagarr,PARarr)).T
+	#print(combinedarray)
+	
+	'''
+	for i in range(1,len(PARz)):
+		if np.isnan(PARz[i]):
+			PARz[i] = PARz[i-1]
+	for i in range(1,len(PARb)):
+		if np.isnan(PARb[i]):
+			PARb[i] = PARb[i-1]
+	'''
+	bins =1000
+	
+	'''	
+	#histogram with different colors for values > upper limit data
+	#bins = 1000
+	#counts = how many PAR obs in each bin, edges = value at the start of each bin
+	#counts,edges = np.histogram(PARarr,bins=bins)
+	
+	#Assigns one color to data that is in range, and another that is out of range
+	#colors = np.array(['red','blue'])[(edges[:-1]>upperlimit).astype(int)]
+	
+	#colors is the array that the intial for loop appends to depending on the flaytype
+	#plt.bar(edges[:-1],counts,width = np.diff(edges), align = "edge", color = colors)
+	
+	plt.yscale('log')
+	'''
+	'''
+	#Plot PAR and color code depending on Flag
+	#fixed x axis so that all plots can be compared
+	#for csv file:
+	counts,edges = np.histogram(PARarr,bins = bins)
+	
+	maxxaxisval = 4500
+	plt.figure()
+	plt.hist([PARz, PARb],bins = bins, stacked = True, density = True)
+	plt.xlim(0,maxxaxisval)
+	plt.yscale('log')
+	#Dynamically names each histogram
+	plt.title('Histogram of PAR for '+shipname + str(year))
+	plt.xlabel('PAR')
+	plt.ylabel('Occurances')
+	#plt.legend((PARz,PARb),('Z-flag','B-flag'))
+	#Draws a line at that upper limit/change in color to give a visual
+	#plt.axvline(x=upperlimit, linestyle='--',linewidth = 1, color = 'grey')
+	#plt.show()
+	#dynamically saves figure to specified location
+	plt.savefig('/Net/mdc/people/ograff/csvfiles/'+shipname+str(year)+'samosPAR.png')
+	'''
+
+	#----- Output to CSV File---------------------------- needs to export "counts" that make up histogram
+	#Creates a CSV file the following data
+	'''
+	binnum = []
+	binnumcount =0
+
+	#array called counts from above, which tells you how many par obs are in each bin
+
+	for i in range(1,bins+1):
+		binnumcount = i
+		binnum.append(binnumcount)
+	
+	#creates a 3-D array of all variables wanted in CSV
+	tocsvarr = zip(binnum,edges,counts)	
+	#Specifies column names for csv file
+	column_names= ['Bin Number', 'Bin Value', 'Count']
+	#creates pandas dataframe
+	ds = pd.DataFrame(tocsvarr, columns = column_names)
+	ds = ds.sort_values(by =['Bin Number', 'Bin Value', 'Count'])
+	ds = ds.drop_duplicates()
+	#saves to dynamically named csv file
+	ds.to_csv('/Net/mdc/people/ograff/csvfiles/'+shipname+str(year)+'samos.csv', index = False)
+	print (ds)
+	'''
+	#percentdata = [str(percent), str(percentile98), str(percentile99), str(percentile995)]
+	#specifies column names for csv file
+	#column_names = ['%PAR > 2600', '98th %ile', '99th %ile', '99.5th %ile']
+	#create pandas df
+	ds = pd.DataFrame([['%PAR > 2600', str(percent)],['98th %ile', str(percentile98)],['99th %ile', str(percentile99)],['99.5th %ile', str(percentile995)]], columns = [shipname,str(year)])
+	ds = ds.drop_duplicates()
+	#save to dynamically named csvfile
+	ds.to_csv('/Net/mdc/people/ograff/csvfiles/'+shipname+str(year)+'samospercentsPAR.csv', index = False)
+	print(ds)
+else:
+	print('RAD_PAR does not exist in this file')
+
+
+if len(PARarr2) != 0:
+	#print(PARb)
+	#print(len(flagarr2), len(PARarr2))
+	#print(len(PAR2b), len(PAR2z))
+	#exclude special and missing:
+	
+	#print(NanCount2, exceedUL2, inrange2)	
+	#print(exceedUL + inrange)
+	#finds the percentages and appends them to the empty list for the overall percent
+	#of PAR value that is over the defined upperlimit.
+	#totalobs = NanCount + exceedUL + inrange
+	percent2 = (exceedUL2/(exceedUL2+inrange2))*100.
+	#print(percent2)
+	#percentages.append(percent)
+	#print('percent of par > upperlimit: ',percent2)
+	
+	for i in range(1,len(PARarr2)):
+		if np.isnan(PARarr2[i]):
+			PARarr2[i] = PARarr2[i-1]
+		
+	percentile992 = np.nanpercentile(PARarr2,99)
+	percentile982 = np.nanpercentile(PARarr2,98)
+	percentile9952 = np.nanpercentile(PARarr2,99.5)
+	#print('98th percentile',percentile982)
+	#print('99th percentile', percentile992)
+	#print('99.5th percentile', percentile9952)
+
+	maxpar2 = np.nanmax(PARarr2)
+	#Use nanmax because there are nanvalues in the array
+	#print('maxpar',np.nanmax(PARarr2))
+	bins2 =1000
+	
+	
+	#Plot PAR and color code depending on Flag
+	#fixed x axis so that all plots can be compared
+	#for csv file:
+	counts2,edges2 = np.histogram(PARarr2,bins = bins2)
+	
+	maxxaxisval2 = 4500
+	plt.figure()
+	plt.hist([PAR2z, PAR2b],bins = bins2, stacked = True, density = True)
+	plt.xlim(0,maxxaxisval2)
+	plt.yscale('log')
+	#Dynamically names each histogram
+	plt.title('Histogram of PAR2 for '+shipname + str(year))
+	plt.xlabel('PAR2')
+	plt.ylabel('Occurances')
+	#plt.legend((PARz,PARb),('Z-flag','B-flag'))
+	#Draws a line at that upper limit/change in color to give a visual
+	#plt.axvline(x=upperlimit, linestyle='--',linewidth = 1, color = 'grey')
+	#plt.show()
+	#dynamically saves figure to specified location
+	plt.savefig('/Net/mdc/people/ograff/csvfiles/'+shipname+str(year)+'samosPAR2.png')
+
+	#percentdata = [str(percent), str(percentile98), str(percentile99), str(percentile995)]
+	#specifies column names for csv file
+	#column_names = ['%PAR > 2600', '98th %ile', '99th %ile', '99.5th %ile']
+	#create pandas df
+	df = pd.DataFrame([['%PAR > 2600', str(percent2)],['98th %ile', str(percentile982)],['99th %ile', str(percentile992)],['99.5th %ile', str(percentile9952)]], columns = [shipname,str(year)])
+	df = df.drop_duplicates()
+	#save to dynamically named csvfile
+	df.to_csv('/Net/mdc/people/ograff/csvfiles/'+shipname+str(year)+'samospercentsPAR2.csv', index = False)
+	print(df)
+	
+else:
+	print('RAD_PAR2 does not exist in this file')
+
+
+totalobs = NanCount + exceedUL + inrange +NanCount2 + exceedUL2 + inrange2
+print(totalobs)
