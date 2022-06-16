@@ -1,0 +1,361 @@
+'''
+This code runs all of the plots for KSAN, Sproul, and Sally Ride to investigate the smoke
+interference on PAR and a multitude of other variables between the dates of 09/05/2020-09/15/2020.
+Plots include time series of each individual data source, as well as a comparison all data sources
+investigating a single variable variable.
+'''
+import xarray as xr
+import matplotlib.pyplot as plt
+import os
+import csv
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+import matplotlib.pyplot as plt
+import datetime
+from datetime import datetime, timedelta
+import pandas as pd
+from pandas import read_csv
+from pandas import DataFrame
+from matplotlib import pyplot
+import numpy as np	
+import netCDF4 as nc
+
+#----------------- Plots and Data for KSAN----------------------------------------------
+positions =[]
+datearr=[]
+windspeedarr=[]
+bins = {}
+temp=[]
+rharr=[]
+dpttemp=[]
+winddir=[]
+windspd=[]
+bins={}
+
+#Open and read metar textfile, taking into consideration missing values 
+with open('/Net/mdc/people/ograff/sandiego-allvar.txt','r') as f:
+	reader = csv.DictReader(f)
+	for row in reader:
+		date = pd.to_datetime(row['valid'])
+		datearr.append(date)
+		#appends to the temperature array
+		tempf=row['tmpf']
+		temp.append(tempf)	
+		#appends to the dewpoint temp array
+		dwpf=row['dwpf']
+		dpttemp.append(dwpf)
+		#appends to the relative humidity array
+		rh=row['relh']
+		rharr.append(rh)
+		#appends to the wind direction array
+		wndir=row['drct']
+		if wndir == 'M':
+    			winddir.append(np.nan)
+		else:
+    			winddir.append(wndir)
+		#winddir.append(wndir)
+		#appends to the wind speed array
+		wndsp=row['sknt']
+		windspd.append(wndsp)		
+	
+f.close()
+
+#append to an array instances of smoke occurance, as either true(1) or false (0), to then plot in the time series
+sm=pd.read_csv('/Net/mdc/people/ograff/sandiego_metar_new.txt')
+#print(sm)
+metar = sm['metar']
+smoke=metar.str.split(' ')
+smokecheck='FU'
+smoke_occurance=[]
+nosmoke=[]
+
+#check for instances of smoke
+for i in range(len(sm)):
+	if smokecheck in smoke[i]:
+		smoke_occurance.append(1)
+	else:
+		smoke_occurance.append(0)
+print(smoke_occurance)
+
+#Create pandas dataframe 
+arr=np.array([datearr,temp,dpttemp,rharr,windspd, winddir, smoke_occurance])
+df = pd.DataFrame(arr)
+df = df.T
+df.columns=['Date','Temperature (F)','Dewpoint Temperature (F)', 'Relative Humidity (%)', 'Wind Speed (kt)', 'Wind Direction (degrees)', 'Smoke(1), No Smoke(0)']
+#convert dataframe to csv
+df.to_csv('/Net/mdc/people/ograff/sandiego_all.csv',index=False)
+print(df)
+
+#Plot individual KSAN data 
+series=read_csv('/Net/mdc/people/ograff/sandiego_all.csv', header=0, index_col=0, parse_dates=True, squeeze=True)
+series.plot(subplots=True, title='KSAN time series plot 09052020-09152020', color='blue')
+plt.xlabel('Date')
+plt.show()
+plt.close()
+
+#Slice data into 3 plots over a 3 day span
+
+series.plot(subplots=True, title='KSAN time series plot 09052020-09082020', color='blue')
+plt.xlabel('Date')
+plt.xlim('2020-09-05','2020-09-08')
+plt.show()
+plt.close()
+
+series.plot(subplots=True, title='KSAN time series plot 09092020-09112020', color='blue')
+plt.xlabel('Date')
+plt.xlim('2020-09-09','2020-09-11')
+plt.show()
+plt.close()
+
+series.plot(subplots=True, title='KSAN time series plot 09122020-090152020', color='blue')
+plt.xlabel('Date')
+plt.xlim('2020-09-12','2020-09-15')
+plt.show()
+plt.close()
+
+#----------------- Plots and Data for Sally Ride-----------------------------------------
+#Location of ship & year 	
+path_sally = '/Net/mdc/people/ograff/smokenetcdf_sallyride/'
+#print(path)
+
+#empty list to store every file in an array
+filenames_sally = []
+folder_sally=os.fsencode(path_sally)
+
+#loop through the files appending them to the array: filename
+for file in os.listdir(folder_sally):
+	filename_sally = os.fsdecode(file)
+	if filename_sally.endswith('.nc'):
+		filenames_sally.append(filename_sally)
+#sort the files so that the files are in date order
+filenames_sally.sort()
+#print(filenames_sally)
+#append files from 09/05/20-09/15/20 (dates of smoke)
+date_arr_sally = []
+temp_arr_sally = []
+winddir_arr_sally = []
+windspd_arr_sally=[]
+rh_arr_sally = []
+sw_rad_arr_sally=[]
+lw_rad_arr_sally=[]
+PAR_arr_sally = []
+parflagarr_sally=[]
+lwflagarr_sally=[]
+swflagarr_sally=[]
+windspdarr_sally=[]
+winddirarr_sally=[]
+#loop that opens/closes each file, appending the Date, temperature, wind direction, wind speed
+#relative humidity, sw radiation, long wave radiation, and par for each time 
+
+for file in filenames_sally:
+	#open file
+	ds = xr.open_dataset(path_sally+file)
+	flags = np.array(ds.flag)
+	date = ds.time
+	date=np.array(date)
+	temp = ds.T
+	temp = (temp * 9/5)+32
+	temp = np.array(temp)
+	winddir=np.array(ds.DIR)
+	windspd = np.array(ds.SPD)
+	rh = np.array(ds.RH)
+	PAR =np.array(ds.RAD_PAR)
+	swrad = np.array(ds.RAD_SW)
+	lwrad = np.array(ds.RAD_LW)
+	
+	
+	qcpar= ds.RAD_PAR.qcindex
+	parflag=[chr(f[qcpar-1])for f in flags]
+	qclw=ds.RAD_LW.qcindex
+	lwflag=[chr(f[qclw-1])for f in flags]
+	qcsw=ds.RAD_SW.qcindex
+	swflag=[chr(f[qcsw-1])for f in flags]
+	qcwindspd=ds.SPD.qcindex
+	windspdflag=[chr(f[qcwindspd-1])for f in flags]
+	qcwinddir=ds.DIR.qcindex
+	winddirflag=[chr(f[qcwinddir-1])for f in flags]
+	
+	for i in range (len(parflag)):
+			date_arr_sally.append(date[i])
+			rh_arr_sally.append(rh[i])
+			temp_arr_sally.append(temp[i])
+			parflagarr_sally.append(parflag[i])
+			lwflagarr_sally.append(lwflag[i])
+			swflagarr_sally.append(swflag[i])
+			windspdarr_sally.append(windspdflag[i])
+			winddirarr_sally.append(winddirflag[i])
+	
+	for i in range (len(PAR)):
+		if(parflag[i] == 'B'or PAR[i]<-10.0):
+			PAR[i]=None
+		if(lwflag[i] == 'B'or lwrad[i]<-10.0):
+			lwrad[i]=None
+		if(swflag[i] == 'B'or swrad[i]<-10.0):
+			swrad[i]=None
+		if(winddirflag[i]=='B'):
+			winddir[i]=None
+		if(windspdflag[i]=='B'or winddir[i]==-99.0):
+			windspd[i]=None
+		PAR_arr_sally.append(PAR[i])
+		winddir_arr_sally.append(winddir[i])
+		windspd_arr_sally.append(windspd[i])
+		sw_rad_arr_sally.append(swrad[i])
+		lw_rad_arr_sally.append(lwrad[i])
+	ds.close()
+	
+
+columns=['Date','Temperature (F)', 'Relative Humidity (%)', 'Wind Speed (m/s)', 'Wind Direction (Earth Relative)', 'PAR', 'SW Radiation', 'LW Radiation']
+df_sally=pd.DataFrame({'Date': date_arr_sally, 'Temperature (F)':temp_arr_sally, 'Relative Humidity (%)':rh_arr_sally, 'Wind Speed (m/s)':windspd_arr_sally, 'Wind Direction (Earth Relative)':winddir_arr_sally, 'PAR':PAR_arr_sally, 'SW Radiation':sw_rad_arr_sally, 'LW Radiation':lw_rad_arr_sally})
+df_sally.to_csv('/Net/mdc/people/ograff/sallyride_TS.csv',index=False)
+print(df_sally)
+
+
+#plot all and slice into 3 days at a time
+series=read_csv('/Net/mdc/people/ograff/sallyride_TS.csv', header=0, index_col=0, parse_dates=True, squeeze=True)
+series.plot(subplots=True, title='Sally Ride time series plot 09052020-09152020', color='blue')
+plt.xlabel('Date')
+plt.show()
+plt.close()
+
+series.plot(subplots=True, title='Sally Ride Time Series Plot 09052020-09082020', color='blue')
+plt.xlabel('Date')
+plt.xlim('2020-09-05','2020-09-08')
+plt.show()
+plt.close()
+
+series.plot(subplots=True, title='Sally Ride Time Series Plot 09092020-09112020', color='blue')
+plt.xlabel('Date')
+plt.xlim('2020-09-09','2020-09-11')
+plt.show()
+plt.close()
+
+series.plot(subplots=True, title='Sally Ride Time Series Plot 09122020-09152020', color='blue')
+plt.xlabel('Date')
+plt.xlim('2020-09-12','2020-09-15')
+plt.show()
+plt.close()
+
+#----------------- Plots and Data for Sproul---------------------------------------------
+#Location of ship & year 	
+path_sproul = '/Net/mdc/people/ograff/smokenetcdf_sproul/'
+#print(path)
+
+#empty list to store every file in an array
+filenames_sproul = []
+folder_sproul=os.fsencode(path_sproul)
+
+#loop through the files appending them to the array: filename
+for file in os.listdir(folder_sproul):
+	filename_sproul = os.fsdecode(file)
+	if filename_sproul.endswith('.nc'):
+		filenames_sproul.append(filename_sproul)
+#sort the files so that the files are in date order
+filenames_sproul.sort()
+
+#append files from 09/05/20-09/15/20 (dates of smoke)
+date_arr_sproul = []
+temp_arr_sproul = []
+winddir_arr_sproul = []
+windspd_arr_sproul=[]
+rh_arr_sproul = []
+sw_rad_arr_sproul=[]
+lw_rad_arr_sproul=[]
+PAR_arr_sproul = []
+parflagarr_sproul=[]
+lwflagarr_sproul=[]
+swflagarr_sproul=[]
+windspdarr_sproul=[]
+winddirarr_sproul=[]
+
+#loop that opens/closes each file, appending the Date, temperature, wind direction, wind speed
+#relative humidity, sw radiation, long wave radiation, and par for each time 
+for file in filenames_sproul:
+	#open file
+	ds = xr.open_dataset(path_sproul+file)
+	flags = np.array(ds.flag)
+	date = ds.time
+	date=np.array(date)
+	PAR =np.array(ds.RAD_PAR)
+	temp = ds.T
+	temp = (temp * 9/5)+32
+	temp = np.array(temp)
+	winddir=np.array(ds.DIR)
+	windspd = np.array(ds.SPD)
+	rh = np.array(ds.RH)
+	swrad = np.array(ds.RAD_SW)
+	lwrad = np.array(ds.RAD_LW)
+	
+	qcpar= ds.RAD_PAR.qcindex
+	parflag=[chr(f[qcpar-1])for f in flags]
+	qclw=ds.RAD_LW.qcindex
+	lwflag=[chr(f[qclw-1])for f in flags]
+	qcsw=ds.RAD_SW.qcindex
+	swflag=[chr(f[qcsw-1])for f in flags]
+	qcwindspd=ds.SPD.qcindex
+	windspdflag=[chr(f[qcwindspd-1])for f in flags]
+	qcwinddir=ds.DIR.qcindex
+	winddirflag=[chr(f[qcwinddir-1])for f in flags]
+	
+	for i in range (len(parflag)):
+		date_arr_sproul.append(date[i])
+		rh_arr_sproul.append(rh[i])
+		temp_arr_sproul.append(temp[i])
+		parflagarr_sproul.append(parflag[i])
+		lwflagarr_sproul.append(lwflag[i])
+		swflagarr_sproul.append(swflag[i])
+		windspdarr_sproul.append(windspdflag[i])
+		winddirarr_sproul.append(winddirflag[i])
+	
+	for i in range(len(PAR)):
+		if(parflag[i] == 'B' or PAR[i]<-10.0):
+			PAR[i]=None
+		if(lwflag[i] == 'B' or lwrad[i]<-10.0):
+			lwrad[i]=None
+		if(swflag[i] == 'B' or swrad[i]<-10.0):
+			swrad[i]=None
+		if(winddirflag[i]=='B'):
+			winddir[i]=None
+		if(windspdflag[i]=='B' or windspd[i]==-99.0):
+			windspd[i]=None
+		PAR_arr_sproul.append(PAR[i])
+		winddir_arr_sproul.append(winddir[i])
+		windspd_arr_sproul.append(windspd[i])
+		sw_rad_arr_sproul.append(swrad[i])
+		lw_rad_arr_sproul.append(lwrad[i])
+	ds.close()
+
+#Create Dataframe
+columns=['Date','Temperature (F)', 'Relative Humidity (%)', 'Wind Speed (m/s)', 'Wind Direction (Earth Relative)', 'PAR', 'SW Radiation', 'LW Radiation']
+df_sproul=pd.DataFrame({'Date': date_arr_sproul, 'Temperature (F)':temp_arr_sproul, 'Relative Humidity (%)':rh_arr_sproul, 'Wind Speed (m/s)':windspd_arr_sproul, 'Wind Direction (Earth Relative)':winddir_arr_sproul, 'PAR':PAR_arr_sproul, 'SW Radiation':sw_rad_arr_sproul, 'LW Radiation':lw_rad_arr_sproul})
+#convert df to csv
+df_sproul.to_csv('/Net/mdc/people/ograff/sproul_TS.csv',index=False)
+print(df_sproul)
+
+#plot all and slice into 3 days at a time
+series=read_csv('/Net/mdc/people/ograff/sproul_TS.csv', header=0, index_col=0, parse_dates=True, squeeze=True)
+series.plot(subplots=True, title='Sproul Time Series plot 09052020-09152020', color='blue')
+plt.xlabel('Date')
+plt.show()
+plt.close()
+
+series.plot(subplots=True, title='Sproul Time Series Plot 09052020-09082020', color='blue')
+plt.xlabel('Date')
+plt.xlim('2020-09-05','2020-09-08')
+plt.show()
+plt.close()
+
+series.plot(subplots=True, title='Sproul Time Series Plot 09092020-09112020', color='blue')
+plt.xlabel('Date')
+plt.xlim('2020-09-09','2020-09-11')
+plt.show()
+plt.close()
+
+series.plot(subplots=True, title='Sproul Time Series Plot 09122020-09152020', color='blue')
+plt.xlabel('Date')
+plt.xlim('2020-09-12','2020-09-15')
+plt.show()
+plt.close()
+
+#-----------------------------------------------------------------------------------------
+#Create plots that combine all three Data sources to display a single variable for easy comparison
+ 
