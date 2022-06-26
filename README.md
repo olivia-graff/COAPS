@@ -1,4 +1,4 @@
-# COAPS
+# COAPS -- code within this repository is written in Python
 Undergraduate Research Work at the Center of Oceanic and Atmospheric Prediction Studies 
 
 (SAMOS) has been collecting, quality-evaluating, and distributing and archiving underway navigational, meteorological, and oceanographic observations from research vessels. This data is collecting ship and instrumental metadata and one-minute interval observations from 44 research vessels. Maps provide users with the geospatial coverage within the SAMOS dataset, with a focus on the Essential Climate/Ocean Variables, and recommendations are made regarding which versions of the dataset should be accessed by different user communities. 
